@@ -1,74 +1,215 @@
 ---
-title: "2 - Indirect Ordination"
-output: learnr::tutorial
-runtime: shiny_prerendered
+title: "3 - Indirect ordination"
+description: "How well do indirect ordinations work?"
+author: "Richard J. Telford"
+date: "23rd October 2020"
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
-library(learnr)
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, eval = FALSE)
+```
+
+The aim of indirect gradient analysis is to try to recover the latent structure in the data. 
+It is impossible to assess how successful this recovery is with real data as the true structure is not known. 
+This makes tests with simulated data, where the structure is know, useful. 
+
+In this practical, you will try to recover the structure in two simulated datasets, and compare the recovered structure to the true structure to determine which ordination procedures work well. 
+The data are simulated using a procedure similar to that developed in Minchin’s (1987) COMPAS program or Gavin Simpson's [`coenocliner` package](https://github.com/gavinsimpson/coenocliner).
+
+Both data sets have has 100 sites arranged in a 2-dimensional grid and about 30 species. 
+In dataset 1  (`sim_spp1` and `sim_env1`), both environmental gradients are the same length, in dataset 2 (`sim_spp2` and `sim_env2`), the second gradient is about three times as long as the first.
+The species data are simulated abundances.
+
+## Task 1.1
+
+Load the `bio303.practicals` package if you have not already done so.
+
+```{r load, echo = TRUE}
+library("bio303.practicals")
 ```
 
 
-## Topic 1
+Import and inspect the simulated data for the first dataset.
 
-### Exercise 
+```{r load-sim1, echo = TRUE}
+data(sim_env1)
+data(sim_spp1)
 
-*Here's a simple exercise with an empty code chunk provided for entering the answer.*
+head(sim_env1)
+head(sim_spp1)
+```
 
-Write the R code required to add two plus two:
 
-```{r two-plus-two, exercise=TRUE}
+## Task 1.2
+
+Use the `plot_grid` function to show the shape of the environmental data in dataset 1.
+In the plot, there is a site at each node of the grid, and the lines join sites with the same values of the two environmental variables.
+Coloured lines mark the middle of each environmental variable.
+
+```{r plot-env1-grid, echo = TRUE}
+plot_grid(sim_env1)
+```
+
+
+## Task 1.3
+
+Now load the `vegan` package which we will use for all ordinations.
+
+```{r load-vegan, echo = TRUE}
+library("vegan")
+```
+
+
+Run function `decorana()` from the vegan package on dataset `sim_spp1`. 
+This will fit a Detrended Correspondence Analysis to the species data.
+
+- Examine the output. How long is the first axis? 
+- What type of analysis is appropriate – one that assumes linear or unimodal responses?
+- Plot the DCA 
+
+```{r decorana, echo = TRUE}
+#length first axis
+dca1 <- decorana(sim_spp1)
+dca1
+
+#dca
+plot(dca1)
+```
+
+
+## Task 1.4
+
+It is see how the DCA has distorted the actual gradients.
+This is where we can use `plot_grid` to highlight the distortions in the original grid.
+
+
+```{r plot-grid-dca1, echo = TRUE}
+plot_grid(dca1)#note triangle configuration
+
+plot_grid(dca1, choice = 2:3)#note twist in axis 3 - very ugly
+```
+
+
+## Task 1.5
+
+We can quantify our comparison of the original and retrieved structure with a Procrustes rotation. 
+
+Proctustes rotations mirror, rotate and stretch ordinations so that they match as well as possible and the residual differences can be quantified.
+
+Run code like `procrustes(sim_env1, DCA1, symmetric = TRUE)`, where `DCA1` is an ordination object.
+The Procrustes sum of squares is the measure of success, being zero for a perfect match.
+
+```{r procrustes, echo = TRUE}
+pro <- procrustes(sim_env1, dca1, symmetric = TRUE, choices = 1:2)
+pro
+plot(pro)
+```
+
+## Task 1.6
+
+Repeat tasks 1.3 to 1.5 with different ordination methods.
+Try to find the method that gives the lowest Procrustes sum of squares. 
+
+Try:
+
+-	PCA with function `rda`
+-	CA with function `cca`
+-	dbRDA with function `dbrda`
+-	NMDS with function `metaMDS`
+
+
+```{r}
+#pca
+pca1 <- rda(sim_spp1)
+plot_grid(pca1)
+procrustes(sim_env1, pca1, symmetric=TRUE)
+
+pca1s <- rda(decostand(sim_spp1, "hellinger"))
+plot_grid(pca1s)
+procrustes(sim_env1, pca1s, symmetric = TRUE) #good result
+
+
+#ca
+ca1 <- cca(sim_spp1)
+plot_grid(ca1)
+procrustes(sim_env1, ca1, symmetric = TRUE)
+
+ca1s <- cca(decostand(sim_spp1, "hellinger"))
+plot_grid(ca1s)
+procrustes(sim_env1, ca1s, symmetric = TRUE)
+
+
+#dbrda
+dbrda1 <- dbrda(sim_spp1 ~ 1, distance = "bray")
+plot_grid(dbrda1)
+procrustes(sim_env1, dbrda1, symmetric = TRUE)
+
+#dbrda with NMDS data processing
+dbrda2 <- dbrda(sim_spp1 ~ 1, distance = "bray", metaMDSdist = TRUE)
+plot_grid(dbrda2)
+procrustes(sim_env1, dbrda2, symmetric = TRUE)
+
+#nmds 
+nmds1 <- metaMDS(sim_spp1, k = 2)
+plot_grid(nmds1)
+procrustes(sim_env1, nmds1, symmetric = TRUE)
 
 ```
 
-### Exercise with Code
 
-*Here's an exercise with some prepopulated code as well as `exercise.lines = 5` to provide a bit more initial room to work.*
+Other things to try:
 
-Now write a function that adds any two numbers and then call it:
+-	Various data transformations with function decostand
+-	Different treatments for rare taxa 
 
-```{r add-function, exercise=TRUE, exercise.lines = 5}
-add <- function() {
-  
-}
+## Task 2
+
+Repeat the above with the second dataset which has a different shape.
+Does the same method give the best result?
+
+
+```{r}
+#dataset 2
+
+plot_grid(sim_env2)
+
+#length first axis
+(dca2 <- decorana(sim_spp2))
+
+#dca
+plot_grid(dca2)
+procrustes(sim_env2, dca2, symmetric = TRUE, choice = 1:2)
+
+#pca
+pca2 <- rda(sim_spp2)
+plot_grid(pca2)
+procrustes(sim_env2, pca2, symmetric = TRUE)
+
+pca2 <- rda(decostand(sim_spp2, "hellinger"))
+plot_grid(pca2)
+procrustes(sim_env2, pca2, symmetric = TRUE)
+
+
+#ca
+ca2 <- cca(sim_spp2)
+plot_grid(ca2)
+procrustes(sim_env2, ca2, symmetric = TRUE)
+
+#dbrda
+dbrda2 <- dbrda(sim_spp2~1, distance="bray")
+plot_grid(dbrda2)
+procrustes(sim_env2, dbrda2, symmetric = TRUE)
+
+#pcoa 
+dbrda22 <- dbrda(sim_spp2~1, distance="bray", metaMDSdist = TRUE)
+plot_grid(dbrda22)
+procrustes(sim_env2, dbrda22, symmetric = TRUE)
+
+#nmds 
+nmds2 <- metaMDS(sim_spp2, k = 2)
+plot_grid(nmds2)
+procrustes(sim_env2, nmds2, symmetric = TRUE)
 ```
 
-## Topic 2
-
-### Exercise with Hint
-
-*Here's an exercise where the chunk is pre-evaulated via the `exercise.eval` option (so the user can see the default output we'd like them to customize). We also add a "hint" to the correct solution via the chunk immediate below labeled `print-limit-hint`.*
-
-Modify the following code to limit the number of rows printed to 5:
-
-```{r print-limit, exercise=TRUE, exercise.eval=TRUE}
-mtcars
-```
-
-```{r print-limit-hint}
-head(mtcars)
-```
-
-### Quiz
-
-*You can include any number of single or multiple choice questions as a quiz. Use the `question` function to define a question and the `quiz` function for grouping multiple questions together.*
-
-Some questions to verify that you understand the purposes of various base and recommended R packages:
-
-```{r quiz}
-quiz(
-  question("Which package contains functions for installing other R packages?",
-    answer("base"),
-    answer("tools"),
-    answer("utils", correct = TRUE),
-    answer("codetools")
-  ),
-  question("Which of the R packages listed below are used to create plots?",
-    answer("lattice", correct = TRUE),
-    answer("tools"),
-    answer("stats"),
-    answer("grid", correct = TRUE)
-  )
-)
-```
+Remember that these simulated data have relatively little noise, and symmetrical responses. The methods also need to be tested with more challenging simulations.
