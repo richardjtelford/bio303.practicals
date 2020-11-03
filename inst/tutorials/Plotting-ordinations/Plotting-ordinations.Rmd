@@ -1,0 +1,109 @@
+---
+title: "Plotting Ordinations"
+description: Plotting an ordination with base plot and ggplot
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+This tutorial will show you how to plot an ordination, when you want something more that the default `vegan` ordination plot gives.
+
+We are going to use a data set of aquatic invertebrate abundances in twelve ditches sampled eleven times before and after insecticide treatment. 
+The log-transformed species data are available with in the vegan package as `pyrifos`; we have to construct the treatment data from information in the `pyrifos` help file.
+
+```{r library-data}
+library("tidyverse")
+library("vegan")
+
+
+#load species data
+data(pyrifos)
+
+#create treatment data
+pyrifos_env <- tibble(
+  week = rep(c(-4, -1, 0.1, 1, 2, 4, 8, 12, 15, 19, 24), each = 12),
+  dose = rep(c(0.1, 0, 0, 0.9, 0, 44, 6, 0.1, 44, 0.9, 0, 6), times = 11),
+  ditch = rep(letters[1:12], times = 11)
+)
+```
+
+We can fit a PCA with 
+
+```{r fit-ord}
+PCA <- rda(pyrifos)
+```
+
+We can make a simple plot of this PCA with the `plot` function.
+
+```{r plot-pca}
+plot(PCA)
+```
+
+This is a good start, but what if we want to give the observations with different doses of insecticide different colours?
+
+We can get more control over the plotting with `type = "n"` to get an empty plot and then plotting the different components separately.
+See `?plot.cca` for more details.
+
+```{r plot-pca2}
+plot(PCA, type = "n")
+points(PCA, display = "sites", col = factor(pyrifos_env$dose))
+```
+
+We could take get a better colour scale or join the observations from the same ditch with a line, but it gets quite complicated.
+
+It can be easier to use `ggplot2` for more complex plots, especially if you are already familiar with `ggplot2`.
+This can be done with the `ggvegan` package from [GitHub](https://github.com/gavinsimpson/ggvegan).
+
+The basic plot can be reproduced with `autoplot`.
+`autoplot` functions exist for several types of R object.
+
+```{r autoplot}
+library("ggvegan")
+autoplot(PCA)
+```
+
+We can take control of the plotting by using `fortify` to get a data.frame of ordination scores, and then combining this with the treatment data and plotting this with `ggplot`.
+
+```{r fortify}
+PCA_fort <- fortify(PCA, display = "sites") # get the scores
+head(PCA_fort)
+
+PCA_fort_treat <- bind_cols(PCA_fort, pyrifos_env) %>% 
+  mutate(dose = factor(dose),
+         dose = fct_rev(dose)) # make dose into a factor and reverse order of levels to improve plot.
+
+PCA_plot <- ggplot(PCA_fort_treat, 
+       aes(x = PC1, y = PC2, colour = dose, group = ditch)) +
+  geom_point() +
+  geom_line() +
+  coord_equal() #VERY IMPORTANT or scaling incorrect.
+
+PCA_plot
+```
+
+It is important to remember to add the `coord_equal`, or the plot will be incorrectly scales. 
+
+We could add the species to this plot, or make another plot of just the species, perhaps colouring them in some useful way.
+
+This plot could be further improved, but already looks pretty good. 
+For example, we could add the variance explained to each axis label, and improve the colour scale.
+
+```{r fortify2}
+explained <- eigenvals(PCA)/sum(eigenvals(PCA)) * 100
+
+PCA_plot + #start with first plot
+  scale_colour_viridis_d(direction = -1, option = "plasma") + 
+  labs(x = glue::glue("PC1 ({explained[1]} %)"), #glue is an alternative to paste for combining text
+       y = glue::glue("PC1 ({explained[2]} %)"))
+
+```
+
+## Your turn
+
+
+
