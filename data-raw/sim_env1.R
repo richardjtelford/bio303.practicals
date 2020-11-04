@@ -18,3 +18,19 @@ sim_spp2 <- read.csv(file = "data-raw/spp2.csv")
 
 usethis::use_data(sim_spp2, overwrite = TRUE)
 
+
+#### ponds ####
+
+## code to prepare `ponds_env` dataset goes here
+ponds_env <- read.csv(file = "data-raw/ponds.env.csv")
+
+usethis::use_data(ponds_env, overwrite = TRUE)
+
+## code to prepare `ponds_env` dataset goes here
+ponds_spp <- read.csv(file = "data-raw/ponds.spp.csv")
+
+usethis::use_data(ponds_spp, overwrite = TRUE)
+
+
+
+

@@ -18,7 +18,8 @@ Imports:
     ggvegan (>= 0.1.0),
     ggplot2,
     rlang,
-    glue
+    glue,
+    GGally
 Remotes: 
     gavinsimpson/ggvegan
 Suggests: 
