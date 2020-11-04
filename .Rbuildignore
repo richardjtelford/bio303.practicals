@@ -4,4 +4,3 @@
 ^data-raw$
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^inst/tutorials/Practical-1/Practical-1\.Rmd$
