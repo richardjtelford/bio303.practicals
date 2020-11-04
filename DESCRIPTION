@@ -19,8 +19,7 @@ Imports:
     ggplot2,
     rlang,
     glue,
-    GGally, 
-    learnr
+    GGally
 Remotes: 
     gavinsimpson/ggvegan
 Depends: 

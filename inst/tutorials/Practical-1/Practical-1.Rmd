@@ -1,8 +1,9 @@
 ---
-title: "Practical 1"
-description: Diversity to mantel tests 
-output: learnr::tutorial
-runtime: shiny_prerendered
+title: "Bio303 - Practical 1"
+description: "Introduction to multivatiate methods"
+author: "Richard J. Telford"
+date: "23rd October 2020"
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
