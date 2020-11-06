@@ -20,7 +20,10 @@ Imports:
     rlang,
     glue,
     GGally,
-    rstudioapi
+    rstudioapi,
+    ggdendro,
+    ggrepel,
+    cluster
 Remotes: 
     gavinsimpson/ggvegan
 Depends: 

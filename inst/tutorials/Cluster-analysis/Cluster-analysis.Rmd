@@ -1,0 +1,188 @@
+---
+title: "Bio303 practical-2 Cluster Analysis"
+description: Hierarchical, k-means, and fuzzy cluster analysis
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Task 1
+
+Cluster analysis of the English ponds diatom assemblage data.
+
+## 1.1 Import data.
+
+Load the ponds species data.
+
+```{r import, echo = TRUE}
+library("bio303.practicals")
+library("tidyverse")
+data("ponds_spp")
+```
+
+## 1.2 Calculate the distance matrix 
+
+Use `vegdist()` in the `vegan` package. 
+Use the  default Bray-Curtis distance. 
+(Optional - compare results with Euclidean distance)
+
+```{r makeDistance}
+library(vegan)
+d <- vegdist(ponds_spp)#Bray-Curtis is the default
+```
+ 
+## 1.3 Hierarchal clustering 
+
+Use `hclust()` to cluster the distances using different clustering algorithms, including
+ 
+ - single linkage
+ - complete linkage
+ - Ward’s minimum variance method
+
+Plot the results and compare and interpret them.
+
+Decide how many clusters there are, and mark them on the plot with `rect.hclust()`, then use `cutree()` to extract the classification.
+
+```{r hierarchical}
+hs <- hclust(d, method = "single")
+plot(hs)
+#can plot with ggplot extension
+ggdendro::ggdendrogram(hs)
+
+hc <- hclust(d, method = "complete")
+plot(hc)
+rect.hclust(hc, k = 2)
+cc <- cutree(hc, k = 2)
+
+hw <- hclust(d, method = "ward.D")
+plot(hw)
+rect.hclust(hw, k = 2)
+cw <- cutree(hw, k = 2)
+
+table(cc, cw)
+```
+
+## 1.4 k-means clustering
+
+Function `kmeans()`, which clusters the data using k-means, requires a data frame, rather than a distance matrix. 
+Use square root transformed species data so that the analysis is based on a chord distance rather than the Euclidean distance. 
+You need to specify the number of clusters with the centres argument 1 ≤ k < n.
+
+```{r kmeans1}
+km <- kmeans(sqrt(ponds_spp), centers = 2)
+```
+
+
+Find the sum of the within group sum of squares.
+Hint: look in the help file for `kmeans` to find the structure of the returned object.
+```{r}
+km$tot.withinss
+```
+
+Find the within group sum of squares for different numbers of clusters (`purrr::map()` or similar will save typing), and plot a screeplot of the result.
+(Note, screeplot is the type of plot, not a function name)
+Is there a clear break of slope?
+
+```{r kmeans2}
+ss <- 1:10 %>% 
+  map(kmeans, x = sqrt(ponds_spp)) %>% #map from purrr package
+  map_dbl("tot.withinss")
+
+tibble(k = 1:10, tot.within = ss) %>% 
+  ggplot(aes(x = k, y = tot.within)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = 1:10)
+
+#comparison with hclust
+km$clu
+table(cc, km$clu)
+```
+
+## 1.5 Fuzzy clustering
+
+Function `fanny()` from the `cluster` package can be used for fuzzy clustering.
+It takes a distance matrix as an argument, and you need to specify the number of clusters `k` to find. 
+The argument `memb.exp` determines how fuzzy the analysis is. 
+With the default value of 2, it may give completely fuzzy results, and you may need to reduce it (but it must remain greater than 1) to get useful results. 
+
+```{r fuzzy}
+library("cluster")
+f <- fanny(d, k = 3, memb = 1.2)
+f
+```
+
+
+## 1.6 Graphical display of fuzzy clustering results
+
+Unlike the hierarchical clustering dendrogram, kmeans and fuzzy clustering methods don’t have a convenient plotting function.
+Instead, we can add the results to an ordination plot. 
+Use the following code
+
+```{r, echo = TRUE}
+cmd <- capscale(d ~ 1)# runs principal coordinates analysis on the distance matrix d.
+plot(cmd, type = "n")
+stars(f$membership, location = scores(cmd, display = "sites"), draw.segments = TRUE, scale = FALSE, 
+  add = TRUE, len = .5, labels = NULL)# where f is output of fuzzy clustering
+sapply(1:max(km$cluster), function(n){
+  x <- cmd[km$cluster == n,]
+  polygon(x[chull(x), ], border = 2)
+})# where km is the output of the kmeans clustering analysis
+```
+
+Make sure you understand what the code is doing.
+
+
+## 1.7 Clustering by fast search and ﬁnd of density peaks
+
+Load the `densityClust` package and try to cluster the ponds data with this method. 
+See the help files for an example. 
+
+```{r densityClust}
+library("densityClust")
+
+clust <- densityClust(d, gaussian = TRUE)#d calculated above
+plot(clust) # Inspect clustering attributes to define thresholds
+
+tibble(rho = clust$rho, delta = clust$delta, id = names(clust$rho)) %>% 
+  ggplot(aes(x = rho, y = delta, label = id)) +
+  geom_point() +
+  ggrepel::geom_text_repel()
+
+#no real evidence of any clusters
+clust <- findClusters(clust, rho = 2, delta = 0.6)
+plotMDS(clust)
+```
+
+# Task 2: Analysis of random data.
+
+Create a 20x2 matrix of random numbers from a Gaussian distribution with `rnorm()` and `matrix()`
+
+Calculate a distance matrix using the Euclidean distance.
+
+Run different hierarchical cluster analysis algorithms on the distance matrix and plot the results.
+
+Do the methods appear to find good clusters?
+
+```{r random}
+rnd <- matrix(rnorm(40, 2), ncol = 2)
+drnd <- dist(rnd)
+hrndw <- hclust(drnd, method = "ward.D")
+hrndc <- hclust(drnd, method = "complete")
+hrnda <- hclust(drnd, method = "average")
+clu <- cutree(hrndw, 2)
+
+plot(rnd, col = clu)
+
+par(mfrow = c(2, 2))
+plot(hrndw)
+rect.hclust(hrndw, k = 2)
+plot(hrndc)
+rect.hclust(hrndc, k = 2)
+plot(hrnda)
+rect.hclust(hrnda, k = 2)
+```
+
