@@ -125,10 +125,11 @@ Use the following code
 ```{r, echo = TRUE}
 cmd <- capscale(d ~ 1)# runs principal coordinates analysis on the distance matrix d.
 plot(cmd, type = "n")
-stars(f$membership, location = scores(cmd, display = "sites"), draw.segments = TRUE, scale = FALSE, 
+sco <- scores(cmd, display = "sites")
+stars(f$membership, location = sco, draw.segments = TRUE, scale = FALSE, 
   add = TRUE, len = .5, labels = NULL)# where f is output of fuzzy clustering
 sapply(1:max(km$cluster), function(n){
-  x <- cmd[km$cluster == n,]
+  x <- sco[km$cluster == n,]
   polygon(x[chull(x), ], border = 2)
 })# where km is the output of the kmeans clustering analysis
 ```
