@@ -1,0 +1,178 @@
+---
+title: "Bio303 practical-4 Direct ordination"
+description: Adding the environmental data
+output: html_document
+---
+
+```{r setup, include=FALSE}
+show_solution = FALSE
+knitr::opts_chunk$set(echo = show_solution, eval = show_solution)
+```
+
+
+
+In this practical we will attempt to find which environmental variables are controlling diatom assemblages in English ponds using indirect and direct gradient analysis.
+
+## Task 1
+
+Load the ponds species and environmental data, and necessary packages.
+
+```{r load-data}
+library("bio303.practicals")
+library("tidyverse")
+library("vegan")
+data("ponds_env")
+data("ponds_spp")
+```
+
+
+## Task 2
+
+Run a DCA analysis of the species data using `decorana()` and determine if a linear or unimodal model is most appropriate. It may be useful to use a `sqrt` transformation to stabilise the variances.
+
+```{r decorana}
+#axis length
+decorana(ponds_spp)
+decorana(sqrt(ponds_spp))
+
+#large reduction in first axis length with square root transform. Probably noise.
+```
+
+
+## Task 3
+
+Use indirect gradient analysis to ordinate the species data. There are several sensible choices for methods: 
+
+- PCA of `sqrt` transformed data with function `rda` (equivalent to using chord distance)
+- CA with function `cca` with either raw or `sqrt` transformed data
+- PCoA on Bray-Curtis distances using function `capscale` (this function requires a formula – use `ponds_spp ~ 1` for unconstrained ordination).
+- NMDS with function `metaMDS` (you need to choose how many axes to recover)
+
+Plot a `screeplot()` of the ordination with argument `bstick = TRUE` (not for PCoA or NMDS). Determine how many axes are interpretable. Plot the ordination. The ordination plots are fully adjustable, see the example for `?plot.cca()` and the plotting tutorial
+
+```{r indirect}
+#indirect ordination
+ord <- rda(decostand(ponds_spp, "hellinger"))
+screeplot(ord, bstick = TRUE)#two significant axes
+
+
+par(mfrow = c(2, 2))
+screeplot(cca(ponds_spp), bstick = TRUE)
+screeplot(cca(sqrt(ponds_spp)), bstick = TRUE) #sqrt improves noisy data
+screeplot(rda(ponds_spp), bstick = TRUE)
+screeplot(rda(sqrt(ponds_spp)), bstick = TRUE)
+```
+
+```{r}
+plot(ord)#default plot - horseshoe. Change to CA
+
+ord <- cca(sqrt(ponds_spp))
+plot(ord, type = "n") #empty plot
+points(ord, disp = "species", pch = "+", col = 2) #add components to empty plot
+points(ord, disp = "sites", pch = 20)
+text(ord, disp = "species", select = colSums(ponds_spp > 0) < 5, cex = .5, col = 2)
+#couple sites extreme on axis 2 might be driven by rare taxa
+```
+
+```{r ggvegan}
+library("ggvegan")#installed from github
+
+#remove taxa with 2 or fewer occurrences
+ord <- cca(sqrt(select_if(ponds_spp, colSums(ponds_spp > 0) > 2)))
+
+#default plot
+autoplot(ord)
+
+#with full control
+ord_f <- fortify(ord)#make into a data_frame
+head(ord_f)
+ord_f %>% filter(Score == "sites") %>% 
+  ggplot(aes(x = CA1, y = CA2)) +
+  geom_vline(xintercept = 0, colour = "grey60") +
+  geom_hline(yintercept = 0, colour = "grey60") + 
+  geom_point() +
+  coord_equal() + #don't forget!!
+  labs(
+    x = paste0("PCA1 (",round(eigenvals(ord)[1]/ord$tot.chi * 100, 1),"%)"),
+    y = paste0("PCA2 (",round(eigenvals(ord)[2]/ord$tot.chi * 100, 1),"%)")
+    )
+
+```
+
+## Task 4
+
+Determine which variables are significantly correlated with the first two ordination axes with `envfit()`, using 999 permutations. Use the envfit’s plot function to add the significant variables to the ordination plot as arrows.
+
+```{r envfit}
+(efit <- envfit(ord, ponds_env, perm = 1000))
+plot(ord)#baseplot
+plot(efit)#everything
+plot(efit, p.max = .05, col = "green")#just significant ones
+```
+
+## Task 5
+
+It can be more useful to show environmental variables as surfaces rather than arrows, as they are often not linearly correlated with ordination space. This can be done with function `ordisurf()`, with uses a GAM to smooth and interpolate the environment. Do this for the environmental variables found to be significant by `envfit`.
+
+
+```{r}
+#ordisurf
+ordisurf(ord, ponds_env$Chla)
+```
+
+## Task 6
+
+Run an appropriate direct gradient analysis using all environmental variables. Use the formula notation `ponds_spp ~ .` and the argument `data = ponds_env`. The “.” means include all variable in the model.
+
+- RDA of `sqrt` transformed data with function `rda` (equivalent to using chord distance)
+- CCA with function `cca` with either raw or `sqrt` transformed data
+- dRDA on Bray-Curtis distances using function `capscale` or `dbrda`
+
+How much of the variation is explained by the first axis? How does this compare with the unconstrained ordination? Plot the analysis.
+
+```{r}
+mod <- rda(decostand(ponds_spp, "hellinger") ~ ., data = ponds_env)#all variables
+mod
+ord
+#summary(mod) # lots of information
+plot(mod)
+```
+
+
+## Task 7
+
+Many of the variables are not significant, or are collinear (use `vif.cca` to find the variance inflation factors), and should be removed to improve the interpretability of the results. Use forward selection with function `ordistep` to determine a good subset of variable that gives a more parsimonious model.
+
+```{r}
+vif.cca(mod)#some high values - indicative of problem
+
+#automatic selection 
+minmod <- step(mod, test = "perm")#starting with the full model
+vif.cca(minmod)#all now low
+
+minmod2 <- step(rda(decostand(ponds_spp, "hellinger") ~  1, ponds_env), reformulate(names(ponds_env)), test = "perm")#starting with an empty model - gives more parsimonious solution
+
+#manual model building
+## -- define the maximal model for scope
+mbig <- rda(decostand(ponds_spp, "hellinger") ~  ., ponds_env)
+## -- define an empty model to start with
+m0 <- rda(decostand(ponds_spp, "hellinger") ~ 1, ponds_env)
+## -- manual selection and updating
+add1(m0, scope = formula(mbig), test = "perm")#start with empty model - test which variable is best to add
+m0 <- update(m0, . ~ . + TP)#tp gives best (lowest) AIC and is significant
+add1(m0, scope = formula(mbig), test = "perm")
+m0 <- update(m0, . ~ . + Alkalinity)
+## -- included variables still significant?
+drop1(m0, test = "perm")
+add1(m0, scope = formula(mbig), test = "perm")
+m0 <- update(m0, . ~ . + Secchi)
+drop1(m0, test = "perm")
+add1(m0, scope = formula(mbig), test = "perm")
+m0 <- update(m0, . ~ . + Maxdept)
+drop1(m0, test = "perm")
+add1(m0, scope = formula(mbig), test = "perm")#no more significant variables
+plot(m0)
+
+#different ordinations methods may find different sets of variables to be important
+```
+
