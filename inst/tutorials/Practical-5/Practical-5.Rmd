@@ -1,0 +1,188 @@
+---
+title: "Bio303 practical-5 Direct ordination"
+description: Atlantic foraminifera
+output: html_document
+---
+
+```{r setup, include=FALSE}
+show_solution = FALSE
+knitr::opts_chunk$set(echo = show_solution, eval = show_solution)
+```
+
+This practical uses the Imbri and Kipp (1971) dataset of planktic foraminifera relative abundance `atl_spp` and oceanographic conditions `atl_env` at 61 stations in the Atlantic Ocean.
+
+
+```{r packages}
+library("bio303.practicals")
+library("vegan")
+library("tidyverse")
+library("ggvegan")#devtools::install_github("gavinsimpson/ggvegan")
+```
+Load the data
+
+```{r import}
+data("atl_env")
+data("atl_spp")
+```
+
+
+## Task 1
+
+Determine if linear or unimodal analyses are likely to be more appropriate?
+
+```{r}
+(dca <- decorana(atl_spp))
+(dcas <- decorana(sqrt(atl_spp)))  #long. unimodal gradient. complete turnover
+```
+
+## Task 2
+
+Select and plot a suitable indirect gradient analysis. Does it exhibit any artefacts? Do other methods behave better?
+
+```{r}
+ca <- cca(atl_spp)
+plot(ca)
+autoplot(ca) # automatic ggplot
+
+#ggplot with more control
+fca <- fortify(ca, display = "sites")
+head(fca)
+fca <- bind_cols(fca, atl_env)
+
+g <- ggplot(fca, aes(x = CA1, y = CA2, colour = WinSST)) + 
+  geom_point() +
+  coord_equal() +
+  scale_colour_gradient(low = "blue", high = "red") + 
+  labs(colour = "Winter SST ºC")
+g
+```
+
+```{r dca}
+#plot DCA
+autoplot(dca)
+
+fdca <- fortify(dca, display = "sites")
+fdca <- bind_cols(fdca, atl_env)
+
+g %+% fdca + aes(x = DCA1, y = DCA2) 
+```
+
+```{r pca}
+#do alternative methods perform better?
+pca <- rda(atl_spp, scale = TRUE)
+plot(pca)#horseshoe
+```
+```{r pcoa}
+#metric scaling
+pcoa <- capscale(atl_spp ~ 1, distance = "bray")
+plot(pcoa, display = "sites")#bad arch
+
+#metric scaling with extended dissimilarities
+d <- vegdist(atl_spp, "bray")
+plot(dist(atl_env$WinSST), d)#distances saturating at one
+d <- stepacross(d, toolong = .9)#use extended similarities
+plot(dist(atl_env$WinSST), d)#more linear
+pcoa2 <- capscale(d ~ 1, comm = atl_spp)
+
+fpcoa2 <- fortify(pcoa2, display = "sites")
+fpcoa2 <- bind_cols(fpcoa2, atl_env)
+fpcoa2_spp <- fortify(pcoa2, display = "species") 
+
+g %+% fpcoa2 + 
+  aes(x = MDS1, y = MDS2) +
+  geom_point(data = fpcoa2_spp, aes(x = MDS1, y = MDS2), inherit.aes = FALSE, shape = 3) +
+  ggrepel::geom_text_repel(data = fpcoa2_spp %>% 
+  filter(map_dbl(atl_spp, max) > 10), 
+            aes(x = MDS1, y = MDS2, label = Label), inherit.aes = FALSE) #labels for common taxa
+  
+  
+#better
+```
+
+```{r nmds}
+#non-metric scaling
+nmds <- metaMDS(atl_spp)
+fnmds <- fortify(nmds) %>% 
+  filter(Score == "sites")
+fnmds <- bind_cols(fnmds, atl_env)
+
+g %+% fnmds + aes(x = NMDS1, y = NMDS2) 
+
+#only slight arch
+```
+```{r prin-curve}
+#principal curve in analogue package
+library(analogue)
+pc <- prcurve(sqrt(atl_spp), plotit = TRUE)
+plot(pc)
+atl_env %>% mutate(lambda = pc$lambda) %>% 
+  ggplot(aes(WinSST, lambda)) +
+  geom_point()
+```
+
+```{r best}
+#is there an objective test as to which is best? NO. But in an exploratory analysis, we can use 1) test correlation with SST, and 2) check ratio of axis 2 to axis 1 which will give a measure of the strength of the arch in this almost one dimensional dataset 
+
+#correlation of axis one with winter SST
+list(dca, ca, pca, nmds, pcoa, pcoa2) %>% 
+  map(~scores(.x, choice = 1, disp = "sites")) %>%
+  map(~cor(.x, atl_env$WinSST))
+#dca, nmds and pcoa with extended dissimilarities have best correlation with SST
+cor(pc$lambda, atl_env$WinSST)#highest!
+
+list(ca, pca, pcoa, pcoa2) %>% 
+  map(~(.x$CA$eig[2] / .x$CA$eig[1]))
+dca$evals[2]/dca$evals[1]
+#pcoa with ex diss almost as low as DCA which has guaranteed no arch
+#nmds has no eigenvalues. Could devise similar statistics from length of axes.
+
+#Results so far: CA beats PCA, but still does not cope well with this gradient. DCA, pcoa with ex diss and nmds are all OK. Principal curves performs very well
+
+```
+
+
+
+## Task 3
+
+Select and plot a suitable direct gradient analysis with all environmental variables? Which variable is more important? What proportion of the variation in the species does it explain?
+
+```{r}
+#constrained analysis
+#most would use CCA here. Lets start with that.
+(cca1 <- cca(atl_spp ~ ., data = atl_env))
+plot(cca1)
+autoplot(cca1)
+
+fortify(cca1) %>% 
+{
+    ggplot(filter(., Score == "biplot"), aes(x = CCA1, y = CCA2)) +
+    geom_point(data = filter(., Score == "species"), shape = 3) +
+    geom_point(
+      data = filter(., Score == "sites") %>% 
+        bind_cols(atl_env), 
+                 mapping = aes(colour = WinSST)) +   
+  geom_segment(aes(x = 0, y = 0, xend = CCA1, yend = CCA2), 
+               arrow = arrow(length = unit(0.2, "cm")), colour = "navy") +
+    geom_text(aes(x = CCA1 * 1.2, y = CCA2 * 1.2, label = Label), colour = "navy") +
+    scale_colour_gradient(low = "blue", high = "red") +
+    scale_x_continuous(expand = c(0.2, 0)) #make space for labels
+  }
+  
+ca <- cca(atl_spp ~ 1, data = atl_env)#empty model
+add1(ca, scope = formula(cca1), test = "perm")#Winter SST is best variable
+cca2 <- cca(atl_spp ~ WinSST, data = atl_env)
+summary(cca2, display = NULL)#constrained axis accounts for 39.6% of the inertia
+
+```
+
+
+## Task 4
+
+Partition the variance in the species data between summer temperature and salinity.
+
+```{r}
+#can do variance partitioning with varpart. But is only available for RDA, it gives unbiased estimates of the amount explained. (Even a random variable will appear to explain something - varpart uses adjusted-R2 to avoid this problem)
+(vp <- varpart(sqrt(atl_spp), atl_env$WinSST, atl_env$Salinity))
+plot(vp) #temperature on left, salinity on right.
+```
+
