@@ -31,6 +31,16 @@ ponds_spp <- read.csv(file = "data-raw/ponds.spp.csv")
 
 usethis::use_data(ponds_spp, overwrite = TRUE)
 
+#### Atlantic Forams ####
+## code to prepare `atl_env` dataset goes here
+atl_env <- read.csv(file = "data-raw/atl.env.csv")
+
+usethis::use_data(atl_env, overwrite = TRUE)
+
+## code to prepare `atl_env` dataset goes here
+atl_spp <- read.csv(file = "data-raw/atl.spp.csv")
+
+usethis::use_data(atl_spp, overwrite = TRUE)
 
 
 
